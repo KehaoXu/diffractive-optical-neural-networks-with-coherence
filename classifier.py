@@ -1,10 +1,15 @@
 import torch
-from torch.nn import Module
+from torch.nn import Module, Parameter
 
 
 class Classifier(Module):
     def __init__(self, shape, region_size):
         super().__init__()
+
+        self.alpha_s = (torch.tensor(0.8))
+        self.alpha_ns = (torch.tensor(0.1))
+        self.I_sat = Parameter((torch.tensor(1) * 1e-6))
+
         if shape < 4 * region_size:
             raise ValueError("shape must be at least 4*region_size")
 
@@ -32,5 +37,18 @@ class Classifier(Module):
 
         self.register_buffer("weight", weight, persistent=False)
 
+    def saturable_absorption(self, x: torch.Tensor) -> torch.Tensor:
+        '''x is the intension of the field'''
+        T = (1 - (self.alpha_s / (1 + x / self.I_sat)) - self.alpha_ns)
+        # amplitude_modulation = torch.sqrt(T)
+        return T * x
+
     def forward(self, x):
-        return torch.einsum("nxy,bxy->bn", self.weight, x)
+        # if torch.isnan(self.saturable_absorption(x)).any():
+        #     print("Input tensor contains NaN values.")
+        
+        # print(self.I_sat)
+        # print(x.mean(),x.min(),x.max())
+        # print(self.saturable_absorption(x))
+        # return torch.einsum("nxy,bxy->bn", self.weight, x)
+        return torch.einsum("nxy,bxy->bn", self.weight, self.saturable_absorption(x))
